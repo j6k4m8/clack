@@ -10,13 +10,12 @@
 mod document;
 mod editor;
 mod row;
-mod speech;
+mod sound;
 mod terminal;
 pub use document::Document;
 use editor::Editor;
 pub use editor::Position;
 pub use row::Row;
-pub use speech::Utterance;
 pub use terminal::Terminal;
 
 fn main() {

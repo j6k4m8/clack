@@ -1,8 +1,65 @@
+use rodio::{
+    source::{SineWave, Source},
+    Decoder, OutputStream, Sink,
+};
+use std::fs::File;
+use std::io::BufReader;
+use std::time::Duration;
 use std::{
     collections::VecDeque,
     process::{Child, Command},
     time::Instant,
 };
+
+pub struct Scale {
+    pub notes: Vec<f32>,
+}
+
+pub struct Tone {
+    pub frequency: f32,
+    pub duration: f32,
+    pub volume: f32,
+}
+
+impl Tone {
+    pub fn new(frequency: f32, duration: f32, volume: f32) -> Self {
+        Self {
+            frequency,
+            duration,
+            volume,
+        }
+    }
+
+    // pub fn play(&self) {
+    //     let mut command = Command::new("afplay");
+    //     command.arg("-r").arg("44100");
+    //     command.arg("-c").arg("2");
+    //     command.arg("-t").arg(&format!("{}", self.duration));
+    //     command.arg("-v").arg(&format!("{}", self.volume));
+    //     command.arg("-f").arg("s16le");
+    //     command.arg("-");
+    //     let mut command = command.stdin(Stdio::piped()).spawn().unwrap();
+    //     let stdin = command.stdin.as_mut().unwrap();
+    //     let mut buffer = [0.0f32; 44100];
+    // }
+
+    pub fn play(&self) {
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        let sink = Sink::try_new(&stream_handle).unwrap();
+
+        // Add a dummy source of the sake of the example.
+        let mut source = SineWave::new(self.frequency)
+            .amplify(self.volume)
+            .take_duration(Duration::from_secs_f32(self.duration));
+
+        source.set_filter_fadeout();
+
+        sink.append(source);
+        // The sound plays in a separate thread. This call will block the current thread until the sink
+        // has finished playing all its queued sounds.
+        sink.sleep_until_end();
+    }
+}
 
 /// An Utterance is a spoken phrase.
 pub struct Utterance {

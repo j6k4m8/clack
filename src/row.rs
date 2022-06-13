@@ -1,3 +1,4 @@
+use crate::sound::{Tone, Utterance, UtteranceManager};
 use std::cmp;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -40,6 +41,7 @@ impl Row {
             .take(end - start)
         {
             if grapheme == "\t" {
+                // TODO: This is bad
                 result.push_str(" ");
             } else {
                 result.push_str(grapheme);
@@ -144,5 +146,47 @@ impl Row {
 
     pub fn as_bytes(&self) -> &[u8] {
         self.string.as_bytes()
+    }
+
+    fn get_tokens_and_indices(&self) -> Vec<(usize, &str)> {
+        // Split on non-alphanumeric characters.
+        let bounds = self.string.split_word_bound_indices();
+        return bounds.into_iter().collect();
+    }
+
+    pub fn get_word_at(&self, at: usize) -> Option<&str> {
+        // Split on tokens
+        for (start, token) in self.get_tokens_and_indices().iter() {
+            if start + token.len() > at {
+                return Some(&self.string[*start..*start + token.len()]);
+            }
+        }
+        None
+    }
+
+    pub fn play_blocking(&self, manager: &mut UtteranceManager) {
+        let tokens = self.get_tokens_and_indices();
+        let mut utterance = Utterance::new(self.string.clone());
+        // Represent leading tabs with tones.
+        let indent_level = self.string.chars().take_while(|c| *c == '\t').count();
+        // TODO: Space indent fixed size:
+        let indent_space_level = self.string.chars().take_while(|c| *c == ' ').count() / 4;
+        let indent_level = indent_level + indent_space_level;
+        // TONES:
+        // D: 36.6666 E: 41.15625 F#: 46.40625 A: 55 B: 61.875
+        let duration = 0.15;
+        let tones = vec![
+            Tone::new(8.0 * 36.6666, 0.25, duration),
+            Tone::new(8.0 * 41.15625, 0.25, duration),
+            Tone::new(8.0 * 46.40625, 0.25, duration),
+            Tone::new(8.0 * 55.0, 0.25, duration),
+            Tone::new(8.0 * 61.875, 0.25, duration),
+        ];
+        for indent in 0..indent_level {
+            tones.get(indent % tones.len()).unwrap().play();
+        }
+
+        // Play the rest of the row:
+        manager.say_and_wait(utterance)
     }
 }

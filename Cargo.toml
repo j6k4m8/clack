@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 termion = "1"
 unicode-segmentation = "1"
+rodio = "0.15.0"

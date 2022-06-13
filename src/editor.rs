@@ -1,4 +1,4 @@
-use crate::speech::{Utterance, UtteranceManager};
+use crate::sound::{Utterance, UtteranceManager};
 use crate::Document;
 use crate::Row;
 use crate::Terminal;
@@ -129,15 +129,43 @@ impl Editor {
             }
             Key::Ctrl('s') => self.save(),
 
-            Key::Ctrl('l') => {
+            Key::Alt('l') => {
+                // Say the current location:
+                self.utterance_manager.interrupt_and_say(Utterance::from(
+                    format!(
+                        "Row {}, column {}",
+                        self.cursor_position.y + 1,
+                        self.cursor_position.x + 1
+                    )
+                    .as_str(),
+                ));
+            }
+            Key::Alt(';') => {
                 // Say the current row.
                 let default = &Row::from("");
                 let row = self
                     .document
                     .get_row(self.cursor_position.y)
                     .unwrap_or(default);
+                row.play_blocking(&mut self.utterance_manager);
+            }
+
+            Key::Alt('/') => {
+                // Spell the current word.
+                let default = &Row::from("");
+                let row = self
+                    .document
+                    .get_row(self.cursor_position.y)
+                    .unwrap_or(default);
+                let word = row.get_word_at(self.cursor_position.x).unwrap_or_default();
+                // Add a space in between each letter.
+                let letters_with_spaces = word
+                    .chars()
+                    .map(|c| format!("{}, ", c))
+                    .collect::<Vec<String>>()
+                    .join("");
                 self.utterance_manager
-                    .say_and_wait(Utterance::from(row.as_str().clone()));
+                    .say_and_wait(Utterance::from(letters_with_spaces.as_str()));
             }
 
             Key::Char(c) => {
@@ -199,7 +227,7 @@ impl Editor {
     fn save(&mut self) {
         if self.document.file_name.is_none() {
             self.utterance_manager
-                .interrupt_and_say(Utterance::from("Save as: "));
+                .say_and_wait(Utterance::from("Save as "));
             let new_name = self.prompt("Save as: ").unwrap_or(None);
             if new_name.is_none() {
                 self.status_message = StatusMessage::from("Save aborted.".to_string());
@@ -211,9 +239,13 @@ impl Editor {
         }
 
         if self.document.save().is_ok() {
-            self.status_message = StatusMessage::from("File saved successfully.".to_string());
             self.utterance_manager
-                .interrupt_and_say(Utterance::from("File saved successfully."));
+                .interrupt_and_say(Utterance::from("Saved. "));
+
+            self.status_message = StatusMessage::from("File saved successfully.".to_string());
+            self.utterance_manager.interrupt_and_say(Utterance::from(
+                format!("{} saved.", self.document.file_name.as_ref().unwrap()).as_str(),
+            ));
         } else {
             self.status_message = StatusMessage::from("Error writing file!".to_string());
             self.utterance_manager
