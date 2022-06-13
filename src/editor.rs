@@ -67,7 +67,7 @@ impl Editor {
     }
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
-        let mut initial_status = String::from("HELP: Ctrl-Q = quit");
+        let mut initial_status = String::from("Ctrl-S = save | Ctrl-Q = quit");
         let document = if args.len() > 1 {
             let file_name = &args[1];
             let doc = Document::open(&file_name);
@@ -116,24 +116,28 @@ impl Editor {
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
             Key::Ctrl('q') => {
-                if self.should_quit == QuitStatus::Default {
+                if self.document.is_dirty() && self.should_quit == QuitStatus::Default {
                     self.should_quit = QuitStatus::Confirming;
                     self.status_message = StatusMessage::from("Quit? (Ctrl-Q)".to_string());
                     self.utterance_manager
                         .interrupt_and_say(Utterance::from("Quit without saving?"));
-                } else if self.should_quit == QuitStatus::Confirming {
+                } else {
                     self.should_quit = QuitStatus::Quitting;
                     self.utterance_manager
                         .interrupt_and_say(Utterance::from("Goodbye!"));
                 }
             }
-            Key::Ctrl('s') => {
-                if self.document.save().is_ok() {
-                    self.status_message =
-                        StatusMessage::from("File saved successfully.".to_string());
-                } else {
-                    self.status_message = StatusMessage::from("Error writing file!".to_string());
-                }
+            Key::Ctrl('s') => self.save(),
+
+            Key::Ctrl('l') => {
+                // Say the current row.
+                let default = &Row::from("");
+                let row = self
+                    .document
+                    .get_row(self.cursor_position.y)
+                    .unwrap_or(default);
+                self.utterance_manager
+                    .say_and_wait(Utterance::from(row.as_str().clone()));
             }
 
             Key::Char(c) => {
@@ -163,6 +167,58 @@ impl Editor {
         }
         self.scroll();
         Ok(())
+    }
+
+    fn prompt(&mut self, prompt: &str) -> Result<Option<String>, std::io::Error> {
+        let mut result = String::new();
+        loop {
+            self.status_message = StatusMessage::from(format!("{}{}", prompt, result));
+            self.refresh_screen()?;
+            match Terminal::read_key()? {
+                Key::Backspace => result.truncate(result.len().saturating_sub(1)),
+                Key::Char('\n') => break,
+                Key::Char(c) => {
+                    if !c.is_control() {
+                        result.push(c);
+                    }
+                }
+                Key::Esc => {
+                    result.truncate(0);
+                    break;
+                }
+                _ => (),
+            }
+        }
+        self.status_message = StatusMessage::from(String::new());
+        if result.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(result))
+    }
+
+    fn save(&mut self) {
+        if self.document.file_name.is_none() {
+            self.utterance_manager
+                .interrupt_and_say(Utterance::from("Save as: "));
+            let new_name = self.prompt("Save as: ").unwrap_or(None);
+            if new_name.is_none() {
+                self.status_message = StatusMessage::from("Save aborted.".to_string());
+                self.utterance_manager
+                    .interrupt_and_say(Utterance::from("Save aborted."));
+                return;
+            }
+            self.document.file_name = new_name;
+        }
+
+        if self.document.save().is_ok() {
+            self.status_message = StatusMessage::from("File saved successfully.".to_string());
+            self.utterance_manager
+                .interrupt_and_say(Utterance::from("File saved successfully."));
+        } else {
+            self.status_message = StatusMessage::from("Error writing file!".to_string());
+            self.utterance_manager
+                .interrupt_and_say(Utterance::from("Error writing file!"));
+        }
     }
 
     fn scroll(&mut self) {
@@ -219,10 +275,16 @@ impl Editor {
                     x = 0;
                 }
             }
-            Key::PageUp => y = if y > term_height { y - term_height } else { 0 },
+            Key::PageUp => {
+                y = if y > term_height {
+                    y.saturating_sub(term_height)
+                } else {
+                    0
+                }
+            }
             Key::PageDown => {
                 y = if y.saturating_add(term_height) < height {
-                    y + term_height as usize
+                    y.saturating_add(term_height)
                 } else {
                     height
                 }
@@ -264,7 +326,10 @@ impl Editor {
         let height = self.terminal.size().height;
         for terminal_row in 0..height {
             Terminal::clear_current_line();
-            if let Some(row) = self.document.get_row(terminal_row as usize + self.offset.y) {
+            if let Some(row) = self
+                .document
+                .get_row(self.offset.y.saturating_add(terminal_row.into()))
+            {
                 self.draw_row(row);
             } else if self.document.row_count() == 0 && terminal_row == height / 3 {
                 self.draw_welcome_message();
@@ -277,28 +342,32 @@ impl Editor {
     pub fn draw_row(&self, row: &Row) {
         let width = self.terminal.size().width as usize;
         let start = self.offset.x;
-        let end = self.offset.x + width;
+        let end = self.offset.x.saturating_add(width);
         println!("{}\r", row.render(start, end))
     }
 
     fn draw_status_bar(&self) {
         let mut status;
         let width = self.terminal.size().width as usize;
+        let modified_indicator = if self.document.is_dirty() { "*" } else { "" };
         let mut file_name = "[No Name]".to_string();
         if let Some(name) = &self.document.file_name {
             file_name = name.clone();
             file_name.truncate(20);
         }
-        status = format!("{} - {} lines", file_name, self.document.row_count());
+        status = format!(
+            "{} - {} lines{}",
+            file_name,
+            self.document.row_count(),
+            modified_indicator
+        );
         let line_indicator = format!(
             "{}/{}",
             self.cursor_position.y.saturating_add(1),
             self.document.row_count()
         );
         let len = status.len() + line_indicator.len();
-        if width > len {
-            status.push_str(&" ".repeat(width - len));
-        }
+        status.push_str(&" ".repeat(width.saturating_sub(len)));
         status = format!("{}{}", status, line_indicator);
         Terminal::set_bg_color(STATUS_BG_COLOR);
         Terminal::set_fg_color(STATUS_FG_COLOR);
