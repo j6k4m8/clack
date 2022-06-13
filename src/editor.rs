@@ -150,6 +150,7 @@ impl Editor {
                 }
             }
 
+            // TODO: Wordwise navigation.
             Key::Up
             | Key::Down
             | Key::Left
