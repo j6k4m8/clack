@@ -19,6 +19,17 @@ impl From<&str> for Row {
 }
 
 impl Row {
+    /// Render a row to a string.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The index of the first character to render.
+    /// * `end` - The index of the last character to render.
+    ///
+    /// # Returns
+    ///
+    /// A string containing the rendered row.
+    ///
     pub fn render(&self, start: usize, end: usize) -> String {
         let end = cmp::min(end, self.string.len());
         let start = cmp::min(start, end);
@@ -37,6 +48,12 @@ impl Row {
         result
     }
 
+    /// Get the length of the row (cached)
+    ///
+    /// # Returns
+    ///
+    /// The length of the row.
+    ///
     pub fn len(&self) -> usize {
         self.len
     }
