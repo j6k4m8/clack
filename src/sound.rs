@@ -22,10 +22,7 @@ pub trait Audible {
     fn stop(&self);
 }
 
-pub struct Scale {
-    pub notes: Vec<f32>,
-}
-
+#[derive(Clone, Copy)]
 pub struct Tone {
     pub frequency: f32,
     pub duration: f32,
@@ -111,6 +108,7 @@ impl Utterance {
     /// Speak the utterance and wait for the speech to finish.
     pub fn speak_and_wait(&self) {
         let mut command = Command::new("say");
+        command.arg("-r").arg("500");
         command.arg(&self.text);
         command.output().unwrap();
     }
@@ -123,6 +121,7 @@ impl Utterance {
     ///
     pub fn speak(&self) -> Child {
         let mut command = Command::new("say");
+        command.arg("-r").arg("500");
         command.arg(&self.text);
         command.spawn().unwrap()
     }
