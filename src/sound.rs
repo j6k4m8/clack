@@ -349,9 +349,7 @@ impl SoundManager {
 
     pub fn speak_next_or_wait(&mut self) {
         while let Some(sound) = self.queue.pop_front() {
-            sound.as_ref().play();
-            // Sleep for 0.1 seconds to allow the sound to play.
-            thread::sleep(Duration::from_millis(100));
+            sound.as_ref().play_and_wait();
         }
         self.current_sound = None;
         self.current_child_process = None;
