@@ -38,6 +38,10 @@ pub struct Editor {
     sound_manager: SoundManager,
 }
 
+enum Mode {
+    Editing,
+}
+
 struct StatusMessage {
     text: String,
     time: Instant,
@@ -54,6 +58,7 @@ impl StatusMessage {
 
 impl Editor {
     pub fn run(&mut self) {
+        self.change_mode(Mode::Editing);
         loop {
             if let Err(error) = self.refresh_screen() {
                 die(error);
@@ -210,6 +215,14 @@ impl Editor {
         }
         self.scroll();
         Ok(true)
+    }
+
+    fn change_mode(&mut self, mode: Mode) {
+        // self.document.change_mode(mode);
+        self.sound_manager
+            .play_and_wait(Box::new(Tone::new(440.0, 0.06, 0.5)));
+        self.sound_manager
+            .play_and_wait(Box::new(Tone::new(440.0 * 3.0 / 2.0, 0.1, 0.5)));
     }
 
     fn speak_current_word(&mut self) {
@@ -425,7 +438,7 @@ impl Editor {
         }
     }
 
-    pub fn draw_row(&self, row: &Row) {
+    fn draw_row(&self, row: &Row) {
         let width = self.terminal.size().width as usize;
         let start = self.offset.x;
         let end = self.offset.x.saturating_add(width);
