@@ -1,3 +1,10 @@
+#[derive(PartialEq, Clone, Copy)]
+
+pub enum SearchDirection {
+    Forward,
+    Backward,
+}
+
 /// Create a speakable sentence from a string.
 /// This handles the following:
 /// - Replacing symbols with their spoken equivalent

@@ -9,6 +9,8 @@ use std::{
 };
 use std::{thread, time::Duration};
 
+use crate::Row;
+
 const RATE_WPM: &str = "300";
 
 pub const SCALE_NOTES_MAP: &[f32] = &[
@@ -375,5 +377,13 @@ impl SoundManager {
 
     pub fn play_and_wait(&mut self, sound: Box<dyn Audible>) {
         sound.play_and_wait();
+    }
+
+    pub fn play_row(&mut self, row: &Row) {
+        row.play(self);
+    }
+
+    pub fn play_row_and_wait(&mut self, row: Row) {
+        row.play_blocking(self);
     }
 }

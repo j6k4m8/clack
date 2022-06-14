@@ -1,4 +1,5 @@
 use crate::sound::{SoundManager, Tone, Utterance};
+use crate::utils::SearchDirection;
 use crate::Document;
 use crate::Row;
 use crate::Terminal;
@@ -28,7 +29,7 @@ enum WrappingBehavior {
     Default,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
@@ -150,31 +151,7 @@ impl Editor {
             }
             Key::Ctrl('s') => self.save(),
 
-            Key::Ctrl('f') => {
-                self.sound_manager
-                    .play_and_wait(Box::new(Utterance::from("Find.")));
-
-                if let Some(query) = self
-                    .prompt("Find: ", |editor, _, query| {
-                        if let Some(position) = editor.document.find(&query) {
-                            editor.cursor_position = position;
-                            editor.scroll();
-                            editor.play_success_sound();
-                        }
-                    })
-                    .unwrap_or(None)
-                {
-                    if let Some(position) = self.document.find(&query[..]) {
-                        self.cursor_position = position;
-                        self.scroll();
-                        self.play_success_sound();
-                    } else {
-                        // Play not-found tone:
-                        self.play_noop_sound();
-                    }
-                }
-                self.say_current_location();
-            }
+            Key::Ctrl('f') => self.search(),
 
             Key::Alt(';') => {
                 // Say the current location:
@@ -218,7 +195,6 @@ impl Editor {
                     self.speak_current_row();
                 } else {
                     self.move_cursor(Key::Right, WrappingBehavior::Wrap);
-                    self.speak_current_row();
                 }
                 if !c.is_alphanumeric() {
                     self.speak_current_word();
@@ -287,8 +263,7 @@ impl Editor {
             .get_row(self.cursor_position.y)
             .unwrap_or(default);
         // row.play(&mut self.sound_manager);
-        self.sound_manager
-            .play_next(Box::new(Utterance::from(row.as_str())));
+        self.sound_manager.play_row(row);
     }
 
     fn play_success_sound(&mut self) {
@@ -303,6 +278,48 @@ impl Editor {
             .play_and_wait(Box::new(Tone::new(440.0 * 3.0 / 2.0, 0.01, 0.25)));
         self.sound_manager
             .play_and_wait(Box::new(Tone::new(440.0 * 3.0 / 2.0, 0.01, 0.25)));
+    }
+
+    fn search(&mut self) {
+        let old_position = self.cursor_position.clone();
+
+        self.sound_manager
+            .play_and_wait(Box::new(Utterance::from("Find.")));
+
+        let mut direction = SearchDirection::Forward;
+        self.prompt("Find: ", |editor, key, query| {
+            let mut moved = false;
+            match key {
+                Key::Right | Key::Down | Key::Ctrl('f') => {
+                    direction = SearchDirection::Forward;
+                    editor.move_cursor(Key::Right, WrappingBehavior::Wrap);
+                    editor.speak_current_row();
+                    moved = true;
+                }
+                Key::Left | Key::Up | Key::Ctrl('b') => {
+                    direction = SearchDirection::Backward;
+                    editor.move_cursor(Key::Left, WrappingBehavior::Wrap);
+                    editor.speak_current_row();
+                    moved = true;
+                }
+                _ => (),
+            }
+            if let Some(position) = editor
+                .document
+                .find(&query, &editor.cursor_position, direction)
+            {
+                editor.cursor_position = position;
+                editor.scroll();
+                editor.play_success_sound();
+            } else if moved {
+                editor.move_cursor(Key::Left, WrappingBehavior::Wrap)
+            }
+        })
+        .unwrap_or(None);
+        self.cursor_position = old_position;
+        self.scroll();
+        self.play_noop_sound();
+        self.say_current_location();
     }
 
     fn prompt<C>(&mut self, prompt: &str, mut callback: C) -> Result<Option<String>, std::io::Error>

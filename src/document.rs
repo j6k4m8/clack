@@ -1,4 +1,4 @@
-use crate::{Position, Row};
+use crate::{utils::SearchDirection, Position, Row};
 use std::{fs, io::Write};
 
 #[derive(Default)]
@@ -96,10 +96,42 @@ impl Document {
         self.dirty
     }
 
-    pub fn find(&self, query: &str) -> Option<Position> {
-        for (y, row) in self.rows.iter().enumerate() {
-            if let Some(x) = row.find(query) {
-                return Some(Position { x, y });
+    pub fn find(&self, query: &str, at: &Position, direction: SearchDirection) -> Option<Position> {
+        if at.y > self.row_count() {
+            return None;
+        }
+
+        let mut position = at.clone();
+
+        let start = if direction == SearchDirection::Forward {
+            at.y
+        } else {
+            0
+        };
+        let end = if direction == SearchDirection::Forward {
+            self.row_count()
+        } else {
+            at.y.saturating_add(1)
+        };
+
+        for _ in start..end {
+            if let Some(row) = self.rows.get(position.y) {
+                if let Some(x) = row.find(query, position.x, direction) {
+                    position.x = x;
+                    return Some(position);
+                }
+                match direction {
+                    SearchDirection::Forward => {
+                        position.y = position.y.saturating_add(1);
+                        position.x = 0;
+                    }
+                    SearchDirection::Backward => {
+                        position.y = position.y.saturating_sub(1);
+                        position.x = self.rows.get(position.y).unwrap().len();
+                    }
+                }
+            } else {
+                return None;
             }
         }
         None

@@ -37,6 +37,7 @@ For now, the following shortcuts are supported:
 | -------- | ------ |
 | `Ctrl+S` | Save   |
 | `Ctrl+Q` | Quit   |
+| `Ctrl+F` | Find   |
 
 ### Speech Commands
 
