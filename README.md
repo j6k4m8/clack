@@ -24,7 +24,7 @@ For now, the following shortcuts are supported:
 | Key     | Action                               |
 | ------- | ------------------------------------ |
 | `Alt+L` | Speak the current line               |
-| `Alt+/` | Speak the current location (Row/Col) |
+| `Alt+;` | Speak the current location (Row/Col) |
 | `Alt+.` | Speak the current word               |
 
 ## Navigation

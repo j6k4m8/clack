@@ -1,4 +1,4 @@
-use crate::sound::{SoundManager, Utterance};
+use crate::sound::{SoundManager, Tone, Utterance};
 use crate::Document;
 use crate::Row;
 use crate::Terminal;
@@ -28,7 +28,8 @@ pub struct Position {
 
 pub struct Editor {
     should_quit: QuitStatus,
-    should_draw: bool,
+    should_draw_ui: bool,
+    wrap_arrow_key_navigation: bool,
     terminal: Terminal,
     cursor_position: Position,
     offset: Position,
@@ -87,7 +88,8 @@ impl Editor {
 
         Self {
             should_quit: QuitStatus::Default,
-            should_draw: false,
+            should_draw_ui: true,
+            wrap_arrow_key_navigation: false,
             terminal: Terminal::default().expect("Failed to initialize terminal"),
             cursor_position: Position::default(),
             document,
@@ -98,7 +100,7 @@ impl Editor {
     }
 
     fn refresh_screen(&mut self) -> Result<(), std::io::Error> {
-        if !self.should_draw {
+        if !self.should_draw_ui {
             return Terminal::flush();
         }
         Terminal::cursor_hide();
@@ -157,7 +159,7 @@ impl Editor {
                 row.play_blocking(&mut self.sound_manager);
             }
 
-            Key::Alt('/') => {
+            Key::Alt('.') => {
                 // Spell the current word.
                 let default = &Row::from("");
                 let row = self
@@ -229,7 +231,7 @@ impl Editor {
             .document
             .get_row(self.cursor_position.y)
             .unwrap_or(default);
-        row.play_blocking(&mut self.sound_manager);
+        row.play(&mut self.sound_manager);
     }
 
     fn prompt(&mut self, prompt: &str) -> Result<Option<String>, std::io::Error> {
@@ -317,7 +319,12 @@ impl Editor {
             0
         };
         match key {
-            Key::Up => y = y.saturating_sub(1),
+            Key::Up => {
+                if y == 0 {
+                    self.play_blocked_navigation_sound();
+                }
+                y = y.saturating_sub(1);
+            }
             Key::Down => {
                 if y < height {
                     y = y.saturating_add(1);
@@ -326,21 +333,25 @@ impl Editor {
             Key::Left => {
                 if x > 0 {
                     x -= 1;
-                } else if y > 0 {
+                } else if y > 0 && self.wrap_arrow_key_navigation {
                     y -= 1;
                     if let Some(row) = self.document.get_row(y) {
                         x = row.len();
                     } else {
                         x = 0;
                     }
+                } else {
+                    self.play_blocked_navigation_sound();
                 }
             }
             Key::Right => {
                 if x < width {
                     x += 1;
-                } else if y < height {
+                } else if y < height && self.wrap_arrow_key_navigation {
                     y += 1;
                     x = 0;
+                } else {
+                    self.play_blocked_navigation_sound();
                 }
             }
             Key::PageUp => {
@@ -371,12 +382,19 @@ impl Editor {
         }
 
         let ending_y = y;
+        self.cursor_position = Position { x, y };
         if starting_y != ending_y {
-            self.sound_manager.say_next(Box::new(Utterance::from(
-                format!("Row {}", y.saturating_add(1)).as_str(),
-            )));
+            self.speak_current_row()
         }
-        self.cursor_position = Position { x, y }
+    }
+
+    fn play_blocked_navigation_sound(&mut self) {
+        self.sound_manager.play_and_wait(Box::new(Tone {
+            frequency: 440.0,
+            duration: 0.2,
+            volume: 0.5,
+        }));
+        // self.sound_manager.play(Box::new(Utterance::from("no.")));
     }
 
     fn draw_welcome_message(&self) {

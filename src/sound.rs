@@ -2,12 +2,14 @@ use rodio::{
     source::{SineWave, Source},
     OutputStream, Sink,
 };
-use std::time::Duration;
 use std::{
     collections::VecDeque,
     process::{Child, Command},
     time::Instant,
 };
+use std::{thread, time::Duration};
+
+const RATE_WPM: &str = "300";
 
 /// A trait for objects that can be played by the sound system.
 /// This is used to abstract away the underlying sound players.
@@ -108,7 +110,7 @@ impl Utterance {
     /// Speak the utterance and wait for the speech to finish.
     pub fn speak_and_wait(&self) {
         let mut command = Command::new("say");
-        command.arg("-r").arg("500");
+        command.arg("-r").arg(RATE_WPM);
         command.arg(&self.text);
         command.output().unwrap();
     }
@@ -121,7 +123,7 @@ impl Utterance {
     ///
     pub fn speak(&self) -> Child {
         let mut command = Command::new("say");
-        command.arg("-r").arg("500");
+        command.arg("-r").arg(RATE_WPM);
         command.arg(&self.text);
         command.spawn().unwrap()
     }
@@ -310,11 +312,11 @@ impl SoundManager {
         }
     }
 
-    pub fn say_next(&mut self, sound: Box<dyn Audible>) {
+    pub fn play_next(&mut self, sound: Box<dyn Audible>) {
         self.queue.push_front(sound);
     }
 
-    pub fn say(&mut self, sound: Box<dyn Audible>) {
+    pub fn play(&mut self, sound: Box<dyn Audible>) {
         self.queue.push_back(sound);
     }
 
@@ -323,12 +325,13 @@ impl SoundManager {
     }
 
     pub fn speak_next_or_wait(&mut self) {
-        if let Some(sound) = self.queue.pop_front() {
+        while let Some(sound) = self.queue.pop_front() {
             sound.as_ref().play();
-        } else {
-            self.current_sound = None;
-            self.current_child_process = None;
+            // Sleep for 0.1 seconds to allow the sound to play.
+            thread::sleep(Duration::from_millis(100));
         }
+        self.current_sound = None;
+        self.current_child_process = None;
     }
 
     pub fn kill(&mut self) {
@@ -341,12 +344,12 @@ impl SoundManager {
 
     pub fn interrupt_and_play(&mut self, interrupt_sound: Box<dyn Audible>) {
         self.kill();
-        self.say_next(interrupt_sound);
+        self.play_next(interrupt_sound);
     }
 
     pub fn clear_and_play(&mut self, sound: Box<dyn Audible>) {
         self.clear();
-        self.say_next(sound);
+        self.play_next(sound);
     }
 
     pub fn play_and_wait(&mut self, sound: Box<dyn Audible>) {
