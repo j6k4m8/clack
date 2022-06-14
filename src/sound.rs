@@ -1,15 +1,26 @@
 use rodio::{
     source::{SineWave, Source},
-    Decoder, OutputStream, Sink,
+    OutputStream, Sink,
 };
-use std::fs::File;
-use std::io::BufReader;
 use std::time::Duration;
 use std::{
     collections::VecDeque,
     process::{Child, Command},
     time::Instant,
 };
+
+/// A trait for objects that can be played by the sound system.
+/// This is used to abstract away the underlying sound players.
+pub trait Audible {
+    /// Start playing the sound.
+    fn play(&self);
+
+    /// Play the sound and wait for it to finish.
+    fn play_and_wait(&self);
+
+    /// Stop playing the sound.
+    fn stop(&self);
+}
 
 pub struct Scale {
     pub notes: Vec<f32>,
@@ -42,12 +53,13 @@ impl Tone {
     //     let stdin = command.stdin.as_mut().unwrap();
     //     let mut buffer = [0.0f32; 44100];
     // }
+}
 
-    pub fn play(&self) {
+impl Audible for Tone {
+    fn play_and_wait(&self) {
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         let sink = Sink::try_new(&stream_handle).unwrap();
 
-        // Add a dummy source of the sake of the example.
         let mut source = SineWave::new(self.frequency)
             .amplify(self.volume)
             .take_duration(Duration::from_secs_f32(self.duration));
@@ -59,6 +71,21 @@ impl Tone {
         // has finished playing all its queued sounds.
         sink.sleep_until_end();
     }
+
+    fn play(&self) {
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        let sink = Sink::try_new(&stream_handle).unwrap();
+
+        let mut source = SineWave::new(self.frequency)
+            .amplify(self.volume)
+            .take_duration(Duration::from_secs_f32(self.duration));
+
+        source.set_filter_fadeout();
+
+        sink.append(source);
+    }
+
+    fn stop(&self) {}
 }
 
 /// An Utterance is a spoken phrase.
@@ -139,7 +166,7 @@ impl From<&str> for Utterance {
 /// The utterance manager is also responsible for keeping track of the
 /// current utterance, so that it can be cancelled if the user requests it.
 #[derive(Default)]
-pub struct UtteranceManager {
+struct UtteranceManager {
     queue: VecDeque<Utterance>,
     current_utterance: Option<Utterance>,
     current_utterance_start: Option<Instant>,
@@ -202,7 +229,7 @@ impl UtteranceManager {
     /// Cancel the current utterance, if there is one. This is done by
     /// killing the child thread that is speaking the utterance.
     /// If there is no current utterance, this is a no-op.
-    pub fn stop(&mut self) {
+    pub fn kill(&mut self) {
         if let Some(child_process) = &mut self.current_child_process {
             child_process.kill().unwrap();
         }
@@ -222,7 +249,7 @@ impl UtteranceManager {
     /// None
     ///
     pub fn interrupt_and_say(&mut self, interrupt_utterance: Utterance) {
-        self.stop();
+        self.kill();
         self.say_next(interrupt_utterance);
     }
 
@@ -252,5 +279,78 @@ impl UtteranceManager {
     /// None
     pub fn say_and_wait(&mut self, utterance: Utterance) {
         utterance.speak_and_wait();
+    }
+}
+
+impl Audible for Utterance {
+    fn play_and_wait(&self) {
+        self.speak_and_wait();
+    }
+
+    fn play(&self) {
+        self.speak();
+    }
+
+    fn stop(&self) {}
+}
+
+pub struct SoundManager {
+    queue: VecDeque<Box<dyn Audible>>,
+    current_sound: Option<Box<dyn Audible>>,
+    current_sound_start: Option<Instant>,
+    current_child_process: Option<Child>,
+}
+
+impl SoundManager {
+    pub fn new() -> Self {
+        Self {
+            queue: VecDeque::new(),
+            current_sound: None,
+            current_sound_start: None,
+            current_child_process: None,
+        }
+    }
+
+    pub fn say_next(&mut self, sound: Box<dyn Audible>) {
+        self.queue.push_front(sound);
+    }
+
+    pub fn say(&mut self, sound: Box<dyn Audible>) {
+        self.queue.push_back(sound);
+    }
+
+    pub fn clear(&mut self) {
+        self.queue.clear();
+    }
+
+    pub fn speak_next_or_wait(&mut self) {
+        if let Some(sound) = self.queue.pop_front() {
+            sound.as_ref().play();
+        } else {
+            self.current_sound = None;
+            self.current_child_process = None;
+        }
+    }
+
+    pub fn kill(&mut self) {
+        if let Some(child_process) = &mut self.current_child_process {
+            child_process.kill().unwrap();
+        }
+        self.current_sound = None;
+        self.current_child_process = None;
+    }
+
+    pub fn interrupt_and_play(&mut self, interrupt_sound: Box<dyn Audible>) {
+        self.kill();
+        self.say_next(interrupt_sound);
+    }
+
+    pub fn clear_and_play(&mut self, sound: Box<dyn Audible>) {
+        self.clear();
+        self.say_next(sound);
+    }
+
+    pub fn play_and_wait(&mut self, sound: Box<dyn Audible>) {
+        sound.play_and_wait();
     }
 }

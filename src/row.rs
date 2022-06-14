@@ -1,5 +1,5 @@
 use crate::{
-    sound::{Tone, Utterance, UtteranceManager},
+    sound::{Audible, SoundManager, Tone, Utterance},
     utils::string_to_speakable_tokens,
 };
 use std::cmp;
@@ -167,7 +167,7 @@ impl Row {
         None
     }
 
-    pub fn play_blocking(&self, manager: &mut UtteranceManager) {
+    pub fn play_blocking(&self, manager: &mut SoundManager) {
         // Represent leading tabs with tones.
         let indent_level = self.string.chars().take_while(|c| *c == '\t').count();
         // TODO: Space indent fixed size:
@@ -189,6 +189,6 @@ impl Row {
 
         // Play the rest of the row:
         let utterance = Utterance::new(string_to_speakable_tokens(&self.string, None));
-        manager.say_and_wait(utterance)
+        manager.play_and_wait(Box::new(utterance))
     }
 }
