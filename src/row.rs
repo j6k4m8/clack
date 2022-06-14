@@ -1,5 +1,5 @@
 use crate::{
-    sound::{Tone, Utterance, UtteranceManager},
+    sound::{Audible, SoundManager, Tone, Utterance},
     utils::string_to_speakable_tokens,
 };
 use std::cmp;
@@ -167,7 +167,7 @@ impl Row {
         None
     }
 
-    pub fn play_blocking(&self, manager: &mut UtteranceManager) {
+    pub fn play_blocking(&self, manager: &mut SoundManager) {
         // Represent leading tabs with tones.
         let indent_level = self.string.chars().take_while(|c| *c == '\t').count();
         // TODO: Space indent fixed size:
@@ -176,19 +176,46 @@ impl Row {
         // TONES:
         // D: 36.6666 E: 41.15625 F#: 46.40625 A: 55 B: 61.875
         let duration = 0.15;
+        let volume: f32 = 0.5;
         let tones = vec![
-            Tone::new(8.0 * 36.6666, 0.25, duration),
-            Tone::new(8.0 * 41.15625, 0.25, duration),
-            Tone::new(8.0 * 46.40625, 0.25, duration),
-            Tone::new(8.0 * 55.0, 0.25, duration),
-            Tone::new(8.0 * 61.875, 0.25, duration),
+            Tone::new(8.0 * 36.6666, duration, volume),
+            Tone::new(8.0 * 41.15625, duration, volume),
+            Tone::new(8.0 * 46.40625, duration, volume),
+            Tone::new(8.0 * 55.0, duration, volume),
+            Tone::new(8.0 * 61.875, duration, volume),
         ];
         for indent in 0..indent_level {
-            tones.get(indent % tones.len()).unwrap().play();
+            manager.play_and_wait(Box::new(*tones.get(indent % tones.len()).unwrap()));
         }
 
         // Play the rest of the row:
         let utterance = Utterance::new(string_to_speakable_tokens(&self.string, None));
-        manager.say_and_wait(utterance)
+        manager.play_and_wait(Box::new(utterance))
+    }
+
+    pub fn play(&self, manager: &mut SoundManager) {
+        // Represent leading tabs with tones.
+        let indent_level = self.string.chars().take_while(|c| *c == '\t').count();
+        // TODO: Space indent fixed size:
+        let indent_space_level = self.string.chars().take_while(|c| *c == ' ').count() / 4;
+        let indent_level = indent_level + indent_space_level;
+        // TONES:
+        // D: 36.6666 E: 41.15625 F#: 46.40625 A: 55 B: 61.875
+        let duration = 0.15;
+        let volume: f32 = 0.5;
+        let tones = vec![
+            Tone::new(8.0 * 36.6666, duration, volume),
+            Tone::new(8.0 * 41.15625, duration, volume),
+            Tone::new(8.0 * 46.40625, duration, volume),
+            Tone::new(8.0 * 55.0, duration, volume),
+            Tone::new(8.0 * 61.875, duration, volume),
+        ];
+        for indent in 0..indent_level {
+            manager.play_and_wait(Box::new(*tones.get(indent % tones.len()).unwrap()));
+        }
+
+        // Play the rest of the row:
+        let utterance = Utterance::new(string_to_speakable_tokens(&self.string, None));
+        manager.play(Box::new(utterance))
     }
 }
