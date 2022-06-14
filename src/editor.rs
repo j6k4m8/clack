@@ -59,12 +59,15 @@ impl Editor {
             if self.should_quit == QuitStatus::Quitting {
                 break;
             }
-            if let Err(error) = self.process_keypress() {
-                die(error);
-            }
+            let input_handler = self.process_keypress();
+            match input_handler {
+                Err(error) => die(error),
+                _ => (),
+            };
             self.utterance_manager.speak_next_or_wait();
         }
     }
+
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
         let mut initial_status = String::from("Ctrl-S = save | Ctrl-Q = quit");
@@ -97,8 +100,6 @@ impl Editor {
         Terminal::cursor_position(&Position { x: 0, y: 0 });
         if self.should_quit == QuitStatus::Quitting {
             Terminal::clear_screen();
-            self.utterance_manager
-                .say_and_wait(Utterance::from("Goodbye!"));
         } else {
             self.draw_rows();
             self.draw_status_bar();
@@ -111,7 +112,7 @@ impl Editor {
         Terminal::cursor_show();
         Terminal::flush()
     }
-    fn process_keypress(&mut self) -> Result<(), std::io::Error> {
+    fn process_keypress(&mut self) -> Result<bool, std::io::Error> {
         // TODO: Modal editing.
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
@@ -191,10 +192,11 @@ impl Editor {
             | Key::PageDown
             | Key::End
             | Key::Home => self.move_cursor(pressed_key),
-            _ => (),
+
+            _ => return Ok(false),
         }
         self.scroll();
-        Ok(())
+        Ok(true)
     }
 
     fn prompt(&mut self, prompt: &str) -> Result<Option<String>, std::io::Error> {

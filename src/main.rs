@@ -12,6 +12,7 @@ mod editor;
 mod row;
 mod sound;
 mod terminal;
+mod utils;
 pub use document::Document;
 use editor::Editor;
 pub use editor::Position;

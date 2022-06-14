@@ -14,12 +14,18 @@ Clack's keyboard shortcuts are still a work-in-progress and support will improve
 
 For now, the following shortcuts are supported:
 
-| Key      | Action                               |
-| -------- | ------------------------------------ |
-| `Ctrl+S` | Save                                 |
-| `Ctrl+Q` | Quit                                 |
-| `Ctrl+J` | Speak the current line               |
-| `Ctrl+L` | Speak the current location (Row/Col) |
+| Key      | Action |
+| -------- | ------ |
+| `Ctrl+S` | Save   |
+| `Ctrl+Q` | Quit   |
+
+## Speech Commands
+
+| Key     | Action                               |
+| ------- | ------------------------------------ |
+| `Alt+L` | Speak the current line               |
+| `Alt+/` | Speak the current location (Row/Col) |
+| `Alt+.` | Speak the current word               |
 
 ## Navigation
 
