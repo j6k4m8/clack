@@ -11,6 +11,29 @@ use std::{thread, time::Duration};
 
 const RATE_WPM: &str = "300";
 
+pub const SCALE_NOTES_MAP: &[f32] = &[
+    262.0, /* C  */
+    277.0, /* C# */
+    294.0, /* D  */
+    311.0, /* D# */
+    330.0, /* E  */
+    349.0, /* F  */
+    370.0, /* F# */
+    392.0, /* G  */
+    415.0, /* G# */
+    440.0, /* A  */
+    466.0, /* A# */
+    494.0, /* B  */
+];
+
+pub const PENTATONIC_SCALE: &[f32] = &[
+    SCALE_NOTES_MAP[1],  /* C# */
+    SCALE_NOTES_MAP[3],  /* D# */
+    SCALE_NOTES_MAP[6],  /* F# */
+    SCALE_NOTES_MAP[8],  /* G# */
+    SCALE_NOTES_MAP[10], /* A# */
+];
+
 /// A trait for objects that can be played by the sound system.
 /// This is used to abstract away the underlying sound players.
 pub trait Audible {

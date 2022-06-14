@@ -142,7 +142,22 @@ impl Editor {
             }
             Key::Ctrl('s') => self.save(),
 
-            Key::Alt(';') => {
+            Key::Ctrl('f') => {
+                self.sound_manager
+                    .interrupt_and_play(Box::new(Utterance::from("Find.")));
+                if let Some(query) = self.prompt("Find: ").unwrap_or(None) {
+                    if let Some(position) = self.document.find(&query[..]) {
+                        self.cursor_position = position;
+                        self.play_success_sound();
+                        self.say_current_location()
+                    } else {
+                        // Play not-found tone:
+                        self.play_noop_sound();
+                    }
+                }
+            }
+
+            Key::Alt('l') => {
                 // Say the current location:
                 self.sound_manager
                     .interrupt_and_play(Box::new(Utterance::from(
@@ -245,6 +260,20 @@ impl Editor {
             .get_row(self.cursor_position.y)
             .unwrap_or(default);
         row.play(&mut self.sound_manager);
+    }
+
+    fn play_success_sound(&mut self) {
+        self.sound_manager
+            .play_and_wait(Box::new(Tone::new(440.0 * 2.0, 0.06, 0.5)));
+    }
+
+    fn play_noop_sound(&mut self) {
+        self.sound_manager
+            .play_and_wait(Box::new(Tone::new(440.0 * 3.0 / 2.0, 0.01, 0.25)));
+        self.sound_manager
+            .play_and_wait(Box::new(Tone::new(440.0 * 3.0 / 2.0, 0.01, 0.25)));
+        self.sound_manager
+            .play_and_wait(Box::new(Tone::new(440.0 * 3.0 / 2.0, 0.01, 0.25)));
     }
 
     fn prompt(&mut self, prompt: &str) -> Result<Option<String>, std::io::Error> {
@@ -407,7 +436,18 @@ impl Editor {
             duration: 0.2,
             volume: 0.5,
         }));
-        // self.sound_manager.play(Box::new(Utterance::from("no.")));
+    }
+
+    fn say_current_location(&mut self) {
+        self.sound_manager
+            .interrupt_and_play(Box::new(Utterance::from(
+                format!(
+                    "Row {}, Column {}.",
+                    self.cursor_position.y + 1,
+                    self.cursor_position.x + 1
+                )
+                .as_str(),
+            )));
     }
 
     fn draw_welcome_message(&self) {
