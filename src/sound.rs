@@ -9,7 +9,32 @@ use std::{
 };
 use std::{thread, time::Duration};
 
+use crate::Row;
+
 const RATE_WPM: &str = "300";
+
+pub const SCALE_NOTES_MAP: &[f32] = &[
+    262.0, /* C  */
+    277.0, /* C# */
+    294.0, /* D  */
+    311.0, /* D# */
+    330.0, /* E  */
+    349.0, /* F  */
+    370.0, /* F# */
+    392.0, /* G  */
+    415.0, /* G# */
+    440.0, /* A  */
+    466.0, /* A# */
+    494.0, /* B  */
+];
+
+pub const PENTATONIC_SCALE: &[f32] = &[
+    SCALE_NOTES_MAP[1],  /* C# */
+    SCALE_NOTES_MAP[3],  /* D# */
+    SCALE_NOTES_MAP[6],  /* F# */
+    SCALE_NOTES_MAP[8],  /* G# */
+    SCALE_NOTES_MAP[10], /* A# */
+];
 
 /// A trait for objects that can be played by the sound system.
 /// This is used to abstract away the underlying sound players.
@@ -326,9 +351,7 @@ impl SoundManager {
 
     pub fn speak_next_or_wait(&mut self) {
         while let Some(sound) = self.queue.pop_front() {
-            sound.as_ref().play();
-            // Sleep for 0.1 seconds to allow the sound to play.
-            thread::sleep(Duration::from_millis(100));
+            sound.as_ref().play_and_wait();
         }
         self.current_sound = None;
         self.current_child_process = None;
@@ -354,5 +377,13 @@ impl SoundManager {
 
     pub fn play_and_wait(&mut self, sound: Box<dyn Audible>) {
         sound.play_and_wait();
+    }
+
+    pub fn play_row(&mut self, row: &Row) {
+        row.play(self);
+    }
+
+    pub fn play_row_and_wait(&mut self, row: Row) {
+        row.play_blocking(self);
     }
 }

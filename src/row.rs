@@ -1,6 +1,6 @@
 use crate::{
-    sound::{Audible, SoundManager, Tone, Utterance},
-    utils::string_to_speakable_tokens,
+    sound::{self, Audible, SoundManager, Tone, Utterance},
+    utils::{string_to_speakable_tokens, SearchDirection},
 };
 use std::cmp;
 use unicode_segmentation::UnicodeSegmentation;
@@ -173,19 +173,16 @@ impl Row {
         // TODO: Space indent fixed size:
         let indent_space_level = self.string.chars().take_while(|c| *c == ' ').count() / 4;
         let indent_level = indent_level + indent_space_level;
-        // TONES:
-        // D: 36.6666 E: 41.15625 F#: 46.40625 A: 55 B: 61.875
         let duration = 0.15;
         let volume: f32 = 0.5;
-        let tones = vec![
-            Tone::new(8.0 * 36.6666, duration, volume),
-            Tone::new(8.0 * 41.15625, duration, volume),
-            Tone::new(8.0 * 46.40625, duration, volume),
-            Tone::new(8.0 * 55.0, duration, volume),
-            Tone::new(8.0 * 61.875, duration, volume),
-        ];
         for indent in 0..indent_level {
-            manager.play_and_wait(Box::new(*tones.get(indent % tones.len()).unwrap()));
+            manager.play_and_wait(Box::new(Tone::new(
+                *sound::PENTATONIC_SCALE
+                    .get(indent % sound::PENTATONIC_SCALE.len())
+                    .unwrap(),
+                duration,
+                volume,
+            )));
         }
 
         // Play the rest of the row:
@@ -217,5 +214,42 @@ impl Row {
         // Play the rest of the row:
         let utterance = Utterance::new(string_to_speakable_tokens(&self.string, None));
         manager.play(Box::new(utterance))
+    }
+
+    pub fn find(&self, query: &str, at: usize, direction: SearchDirection) -> Option<usize> {
+        if at > self.len {
+            return None;
+        }
+        let start = if direction == SearchDirection::Forward {
+            at
+        } else {
+            0
+        };
+        let end = if direction == SearchDirection::Forward {
+            self.len
+        } else {
+            at
+        };
+        #[allow(clippy::integer_arithmetic)]
+        let substring: String = self.string[..]
+            .graphemes(true)
+            .skip(start)
+            .take(end - start)
+            .collect();
+        let matching_byte_index = if direction == SearchDirection::Forward {
+            substring.find(query)
+        } else {
+            substring.rfind(query)
+        };
+        if let Some(matching_byte_index) = matching_byte_index {
+            for (grapheme_index, (byte_index, _)) in
+                substring[..].grapheme_indices(true).enumerate()
+            {
+                if matching_byte_index == byte_index {
+                    return Some(start + grapheme_index);
+                }
+            }
+        }
+        None
     }
 }

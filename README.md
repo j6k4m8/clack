@@ -33,10 +33,11 @@ Clack's keyboard shortcuts are still a work-in-progress and support will improve
 
 For now, the following shortcuts are supported:
 
-| Key      | Action |
-| -------- | ------ |
-| `Ctrl+S` | Save   |
-| `Ctrl+Q` | Quit   |
+| Key      | Action                                 |
+| -------- | -------------------------------------- |
+| `Ctrl+F` | Find (`Ctrl-F`/`Ctrl-B`) cycle results |
+| `Ctrl+S` | Save (`Esc` to cancel)                 |
+| `Ctrl+Q` | Quit                                   |
 
 ### Speech Commands
 
