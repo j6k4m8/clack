@@ -165,7 +165,7 @@ impl Editor {
                 )));
             }
             Key::Alt('l') => {
-                // Say the current row.
+                // Say the current line.
                 self.speak_current_row()
             }
 
@@ -194,10 +194,10 @@ impl Editor {
                     self.cursor_position.x = 0;
                     self.speak_current_row();
                 } else {
+                    if !c.is_alphanumeric() {
+                        self.speak_current_word();
+                    }
                     self.move_cursor(Key::Right, WrappingBehavior::Wrap);
-                }
-                if !c.is_alphanumeric() {
-                    self.speak_current_word();
                 }
             }
 
@@ -409,7 +409,6 @@ impl Editor {
         };
         let term_height = self.terminal.size().height as usize;
         let Position { mut y, mut x } = self.cursor_position;
-        let starting_y = y;
         let height = self.document.row_count();
         let mut width = if let Some(row) = self.document.get_row(y) {
             row.len()
