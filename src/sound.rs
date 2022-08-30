@@ -1,17 +1,16 @@
-use rodio::{
-    source::{SineWave, Source},
-    OutputStream, Sink,
-};
 use std::{
+    borrow::{Borrow, BorrowMut},
     collections::VecDeque,
     process::{Child, Command},
-    time::Instant,
+    thread,
+    time::{Duration, Instant},
 };
-use std::{thread, time::Duration};
+
+use rodio::{source::SineWave, OutputStream, Sink, Source};
 
 use crate::Row;
 
-const RATE_WPM: &str = "300";
+pub const DEFAULT_RATE_WPM: i32 = 300;
 
 pub const SCALE_NOTES_MAP: &[f32] = &[
     262.0, /* C  */
@@ -44,7 +43,10 @@ pub trait Audible {
 
     /// Play the sound and wait for it to finish.
     fn play_and_wait(&self);
+}
 
+/// A trait for Audibles that can be cancelled.
+pub trait CancellableAudible: Audible {
     /// Stop playing the sound.
     fn stop(&self);
 }
@@ -64,38 +66,9 @@ impl Tone {
             volume,
         }
     }
-
-    // pub fn play(&self) {
-    //     let mut command = Command::new("afplay");
-    //     command.arg("-r").arg("44100");
-    //     command.arg("-c").arg("2");
-    //     command.arg("-t").arg(&format!("{}", self.duration));
-    //     command.arg("-v").arg(&format!("{}", self.volume));
-    //     command.arg("-f").arg("s16le");
-    //     command.arg("-");
-    //     let mut command = command.stdin(Stdio::piped()).spawn().unwrap();
-    //     let stdin = command.stdin.as_mut().unwrap();
-    //     let mut buffer = [0.0f32; 44100];
-    // }
 }
 
 impl Audible for Tone {
-    fn play_and_wait(&self) {
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-        let sink = Sink::try_new(&stream_handle).unwrap();
-
-        let mut source = SineWave::new(self.frequency)
-            .amplify(self.volume)
-            .take_duration(Duration::from_secs_f32(self.duration));
-
-        source.set_filter_fadeout();
-
-        sink.append(source);
-        // The sound plays in a separate thread. This call will block the current thread until the sink
-        // has finished playing all its queued sounds.
-        sink.sleep_until_end();
-    }
-
     fn play(&self) {
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         let sink = Sink::try_new(&stream_handle).unwrap();
@@ -109,10 +82,23 @@ impl Audible for Tone {
         sink.append(source);
     }
 
-    fn stop(&self) {}
+    fn play_and_wait(&self) {
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        let sink = Sink::try_new(&stream_handle).unwrap();
+
+        let mut source = SineWave::new(self.frequency)
+            .amplify(self.volume)
+            .take_duration(Duration::from_secs_f32(self.duration));
+
+        source.set_filter_fadeout();
+
+        sink.append(source);
+        sink.sleep_until_end();
+    }
 }
 
 /// An Utterance is a spoken phrase.
+#[derive(Clone)]
 pub struct Utterance {
     text: String,
 }
@@ -135,7 +121,7 @@ impl Utterance {
     /// Speak the utterance and wait for the speech to finish.
     pub fn speak_and_wait(&self) {
         let mut command = Command::new("say");
-        command.arg("-r").arg(RATE_WPM);
+        command.arg("-r").arg(DEFAULT_RATE_WPM.to_string());
         command.arg(&self.text);
         command.output().unwrap();
     }
@@ -148,21 +134,9 @@ impl Utterance {
     ///
     pub fn speak(&self) -> Child {
         let mut command = Command::new("say");
-        command.arg("-r").arg(RATE_WPM);
+        command.arg("-r").arg(DEFAULT_RATE_WPM.to_string());
         command.arg(&self.text);
         command.spawn().unwrap()
-    }
-
-    /// Create a copy of the utterance.
-    ///
-    /// # Returns
-    ///
-    /// A copy of the utterance.
-    ///
-    fn clone(&self) -> Self {
-        Self {
-            text: self.text.clone(),
-        }
     }
 }
 
@@ -189,14 +163,40 @@ impl Audible for Utterance {
     fn play(&self) {
         self.speak();
     }
-
-    fn stop(&self) {}
 }
 
+/// A sequence of Audibles that are played sequentially:
 pub struct SoundSequence {
-    sounds: Vec<Box<dyn Audible>>,
+    audibles: Vec<Box<dyn Audible>>,
 }
 
+impl SoundSequence {
+    /// Create a new SoundSequence.
+    ///
+    /// # Arguments
+    ///
+    /// * `audibles` - The audibles to play.
+    ///
+    /// # Returns
+    ///
+    /// A new SoundSequence.
+    ///
+    pub fn new(audibles: Vec<Box<dyn Audible>>) -> Self {
+        Self { audibles }
+    }
+}
+
+impl Audible for SoundSequence {
+    fn play(&self) {
+        todo!()
+    }
+
+    fn play_and_wait(&self) {
+        for audible in &self.audibles {
+            audible.play_and_wait();
+        }
+    }
+}
 pub struct SoundManager {
     queue: VecDeque<Box<dyn Audible>>,
     current_sound: Option<Box<dyn Audible>>,
@@ -214,11 +214,11 @@ impl SoundManager {
         }
     }
 
-    pub fn play_next(&mut self, sound: Box<dyn Audible>) {
+    pub fn prepend(&mut self, sound: Box<dyn Audible>) {
         self.queue.push_front(sound);
     }
 
-    pub fn play(&mut self, sound: Box<dyn Audible>) {
+    pub fn append(&mut self, sound: Box<dyn Audible>) {
         self.queue.push_back(sound);
     }
 
@@ -226,9 +226,11 @@ impl SoundManager {
         self.queue.clear();
     }
 
-    pub fn speak_next_or_wait(&mut self) {
+    pub fn play_next_or_wait(&mut self) {
         while let Some(sound) = self.queue.pop_front() {
             sound.as_ref().play_and_wait();
+            self.current_sound = Some(sound);
+            self.current_sound_start = Some(Instant::now());
         }
         self.current_sound = None;
         self.current_child_process = None;
@@ -244,12 +246,12 @@ impl SoundManager {
 
     pub fn interrupt_and_play(&mut self, interrupt_sound: Box<dyn Audible>) {
         self.kill();
-        self.play_next(interrupt_sound);
+        self.prepend(interrupt_sound);
     }
 
     pub fn clear_and_play(&mut self, sound: Box<dyn Audible>) {
         self.clear();
-        self.play_next(sound);
+        self.prepend(sound);
     }
 
     pub fn play_and_wait(&mut self, sound: Box<dyn Audible>) {

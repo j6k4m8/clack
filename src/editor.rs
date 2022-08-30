@@ -1,5 +1,5 @@
 use crate::sound::{SoundManager, Tone, Utterance};
-use crate::utils::SearchDirection;
+use crate::utils::{string_to_speakable_tokens, SearchDirection};
 use crate::Document;
 use crate::Row;
 use crate::Terminal;
@@ -81,7 +81,7 @@ impl Editor {
                 Err(error) => die(error),
                 _ => (),
             };
-            self.sound_manager.speak_next_or_wait();
+            self.sound_manager.play_next_or_wait();
         }
     }
 
@@ -155,7 +155,7 @@ impl Editor {
 
             Key::Alt(';') => {
                 // Say the current location:
-                self.sound_manager.play_next(Box::new(Utterance::from(
+                self.sound_manager.prepend(Box::new(Utterance::from(
                     format!(
                         "Row {}, column {}",
                         self.cursor_position.y + 1,
@@ -187,16 +187,30 @@ impl Editor {
                     .play_and_wait(Box::new(Utterance::from(letters_with_spaces.as_str())));
             }
 
-            Key::Char(c) => {
-                self.document.insert(&self.cursor_position, c);
-                if c == '\n' {
-                    self.cursor_position.y += 1;
-                    self.cursor_position.x = 0;
+            Key::Alt(c) => {
+                if c == 'j' {
+                    // Say the current line.
                     self.speak_current_row();
+                    self.move_cursor(Key::Down, WrappingBehavior::Default);
+                }
+            }
+
+            Key::Char(c) => {
+                if c == '\n' {
+                    self.insert_carriage_return();
                 } else {
                     if !c.is_alphanumeric() {
-                        self.speak_current_word();
+                        if self
+                            .get_current_word()
+                            .chars()
+                            .map(|c| c.is_alphanumeric())
+                            .all(|c| c)
+                        {
+                            self.speak_current_word();
+                        }
+                        self.speak_character(&c.to_string());
                     }
+                    self.document.insert(&self.cursor_position, c);
                     self.move_cursor(Key::Right, WrappingBehavior::Wrap);
                 }
             }
@@ -243,7 +257,19 @@ impl Editor {
         }
     }
 
+    fn insert_carriage_return(&mut self) {
+        self.document.insert(&self.cursor_position, '\n');
+        self.move_cursor(Key::Right, WrappingBehavior::Wrap);
+    }
+
     fn speak_current_word(&mut self) {
+        let word = self.get_current_word();
+        self.sound_manager.play_and_wait(Box::new(Utterance::from(
+            string_to_speakable_tokens(&word, None).as_str(),
+        )));
+    }
+
+    fn get_current_word(&self) -> String {
         let default = &Row::from("");
         let row = self
             .document
@@ -252,8 +278,13 @@ impl Editor {
         let word = row
             .get_word_at(self.cursor_position.x.saturating_sub(1))
             .unwrap_or_default();
-        self.sound_manager
-            .play_and_wait(Box::new(Utterance::from(word)));
+        word.to_string()
+    }
+
+    fn speak_character(&mut self, c: &str) {
+        self.sound_manager.play_and_wait(Box::new(Utterance::from(
+            string_to_speakable_tokens(c, None).as_str(),
+        )));
     }
 
     fn speak_current_row(&mut self) {
