@@ -213,7 +213,7 @@ impl Row {
 
         // Play the rest of the row:
         let utterance = Utterance::new(string_to_speakable_tokens(&self.string, None));
-        manager.play(Box::new(utterance))
+        manager.append(Box::new(utterance))
     }
 
     pub fn find(&self, query: &str, at: usize, direction: SearchDirection) -> Option<usize> {

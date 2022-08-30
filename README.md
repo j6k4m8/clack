@@ -93,3 +93,12 @@ One fun aspect of using Clack is that it can be run entirely by ear, and does no
 -   Raspberry Pi 400
 -   PC-K2
 -   U310
+
+
+# Documentation
+
+Generate documentation by running:
+
+```shell
+cargo doc
+```
