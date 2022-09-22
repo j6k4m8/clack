@@ -1,16 +1,12 @@
 use std::{
-    borrow::{Borrow, BorrowMut},
     collections::VecDeque,
     process::{Child, Command},
-    thread,
     time::{Duration, Instant},
 };
 
 use rodio::{source::SineWave, OutputStream, Sink, Source};
 
 use crate::Row;
-
-pub const DEFAULT_RATE_WPM: i32 = 300;
 
 pub const SCALE_NOTES_MAP: &[f32] = &[
     262.0, /* C  */
@@ -101,6 +97,7 @@ impl Audible for Tone {
 #[derive(Clone)]
 pub struct Utterance {
     text: String,
+    rate_wpm: i64,
 }
 
 impl Utterance {
@@ -109,19 +106,27 @@ impl Utterance {
     /// # Arguments
     ///
     /// * `text` - The text of the utterance.
+    /// * `rate_wpm` - The rate of the utterance in words per minute.
     ///
     /// # Returns
     ///
     /// A new Utterance.
     ///
     pub fn new(text: String) -> Self {
-        Self { text }
+        Self {
+            text,
+            rate_wpm: 300,
+        }
+    }
+
+    pub fn from_text_and_wpm(text: String, rate_wpm: i64) -> Self {
+        Self { text, rate_wpm }
     }
 
     /// Speak the utterance and wait for the speech to finish.
     pub fn speak_and_wait(&self) {
         let mut command = Command::new("say");
-        command.arg("-r").arg(DEFAULT_RATE_WPM.to_string());
+        command.arg("-r").arg(self.rate_wpm.to_string());
         command.arg(&self.text);
         command.output().unwrap();
     }
@@ -134,7 +139,7 @@ impl Utterance {
     ///
     pub fn speak(&self) -> Child {
         let mut command = Command::new("say");
-        command.arg("-r").arg(DEFAULT_RATE_WPM.to_string());
+        command.arg("-r").arg(self.rate_wpm.to_string());
         command.arg(&self.text);
         command.spawn().unwrap()
     }
