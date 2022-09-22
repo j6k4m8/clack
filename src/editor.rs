@@ -1,3 +1,4 @@
+use crate::config::{self, ConfigManager};
 use crate::sound::{SoundManager, Tone, Utterance};
 use crate::utils::{string_to_speakable_tokens, SearchDirection};
 use crate::Document;
@@ -38,6 +39,7 @@ pub struct Position {
 pub struct Editor {
     should_quit: QuitStatus,
     should_draw_ui: bool,
+    config_manager: config::ConfigManager,
     wrap_arrow_key_navigation: bool,
     terminal: Terminal,
     cursor_position: Position,
@@ -66,7 +68,13 @@ impl StatusMessage {
     }
 }
 
+/// General implementation of an Editor.
 impl Editor {
+    /// Run the editor.
+    ///
+    /// This is the main entry point for the editor. It will run the editor
+    /// until the user quits.
+    ///
     pub fn run(&mut self) {
         self.change_mode(Mode::Editing);
         loop {
@@ -85,6 +93,8 @@ impl Editor {
         }
     }
 
+    /// Create a new editor with default settings.
+    ///
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
         let mut initial_status = String::from("Ctrl-S = save | Ctrl-Q = quit");
@@ -104,6 +114,7 @@ impl Editor {
         Self {
             should_quit: QuitStatus::Default,
             should_draw_ui: true,
+            config_manager: ConfigManager::new(),
             wrap_arrow_key_navigation: false,
             terminal: Terminal::default().expect("Failed to initialize terminal"),
             cursor_position: Position::default(),
@@ -114,6 +125,33 @@ impl Editor {
         }
     }
 
+    /// Create a new utterance with the default config values.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The utterance to speak.
+    /// * `rate_wpm` - The rate to speak the utterance at.
+    ///
+    /// # Returns
+    ///
+    /// The utterance to speak.
+    ///
+    fn create_utterance(&mut self, text: &str) -> Utterance {
+        let wpm = self.config_manager.get_rate_wpm();
+        let utterance = Utterance::from_text_and_wpm(text.to_string(), wpm);
+        utterance
+    }
+
+    /// Redraw the editor screen.
+    ///
+    /// This will redraw the editor screen and return an error if the redraw
+    /// fails for any reason.
+    ///
+    /// # Returns
+    ///
+    /// Result<(), std::io::Error> - Returns Ok(()) if the redraw succeeds, or
+    /// Err(error) if the redraw fails.
+    ///
     fn refresh_screen(&mut self) -> Result<(), std::io::Error> {
         if !self.should_draw_ui {
             return Terminal::flush();
@@ -134,6 +172,17 @@ impl Editor {
         Terminal::cursor_show();
         Terminal::flush()
     }
+
+    /// Process a single keypress in the document.
+    ///
+    /// This method also handles special key combinations with modifiers like
+    /// Alt, Ctrl, and Shift.
+    ///
+    /// # Returns
+    ///
+    /// Result<bool, std::io::Error> - Returns Ok(true) if the keypress was
+    /// handled, or Err(error) if the keypress failed.
+    ///
     fn process_keypress(&mut self) -> Result<bool, std::io::Error> {
         // TODO: Modal editing.
         let pressed_key = Terminal::read_key()?;
@@ -142,8 +191,8 @@ impl Editor {
                 if self.document.is_dirty() && self.should_quit == QuitStatus::Default {
                     self.should_quit = QuitStatus::Confirming;
                     self.status_message = StatusMessage::from("Quit? (Ctrl-Q)".to_string());
-                    self.sound_manager
-                        .interrupt_and_play(Box::new(Utterance::from("Quit without saving?")));
+                    let utt = self.create_utterance("Quit without saving?");
+                    self.sound_manager.interrupt_and_play(Box::new(utt));
                 } else {
                     self.should_quit = QuitStatus::Quitting;
                     self.change_mode(Mode::Quitting);
@@ -155,14 +204,15 @@ impl Editor {
 
             Key::Alt(';') => {
                 // Say the current location:
-                self.sound_manager.prepend(Box::new(Utterance::from(
+                let utt = self.create_utterance(
                     format!(
                         "Row {}, column {}",
-                        self.cursor_position.y + 1,
-                        self.cursor_position.x + 1
+                        self.cursor_position.y.saturating_add(1),
+                        self.cursor_position.x.saturating_add(1)
                     )
                     .as_str(),
-                )));
+                );
+                self.sound_manager.prepend(Box::new(utt));
             }
             Key::Alt('l') => {
                 // Say the current line.
@@ -183,8 +233,8 @@ impl Editor {
                     .map(|c| format!("{}, ", c))
                     .collect::<Vec<String>>()
                     .join("");
-                self.sound_manager
-                    .play_and_wait(Box::new(Utterance::from(letters_with_spaces.as_str())));
+                let utt = self.create_utterance(letters_with_spaces.as_str());
+                self.sound_manager.play_and_wait(Box::new(utt));
             }
 
             Key::Alt(c) => {
@@ -264,9 +314,8 @@ impl Editor {
 
     fn speak_current_word(&mut self) {
         let word = self.get_current_word();
-        self.sound_manager.play_and_wait(Box::new(Utterance::from(
-            string_to_speakable_tokens(&word, None).as_str(),
-        )));
+        let utt = self.create_utterance(string_to_speakable_tokens(&word, None).as_str());
+        self.sound_manager.play_and_wait(Box::new(utt));
     }
 
     fn get_current_word(&self) -> String {
@@ -282,9 +331,8 @@ impl Editor {
     }
 
     fn speak_character(&mut self, c: &str) {
-        self.sound_manager.play_and_wait(Box::new(Utterance::from(
-            string_to_speakable_tokens(c, None).as_str(),
-        )));
+        let utt = self.create_utterance(string_to_speakable_tokens(c, None).as_str());
+        self.sound_manager.play_and_wait(Box::new(utt));
     }
 
     fn speak_current_row(&mut self) {
@@ -314,8 +362,8 @@ impl Editor {
     fn search(&mut self) {
         let old_position = self.cursor_position.clone();
 
-        self.sound_manager
-            .play_and_wait(Box::new(Utterance::from("Find.")));
+        let utt = self.create_utterance("Find.");
+        self.sound_manager.play_and_wait(Box::new(utt));
 
         let mut direction = SearchDirection::Forward;
         self.prompt("Find: ", |editor, key, query| {
@@ -387,31 +435,31 @@ impl Editor {
 
     fn save(&mut self) {
         if self.document.file_name.is_none() {
-            self.sound_manager
-                .play_and_wait(Box::new(Utterance::from("Save as ")));
+            let utt = self.create_utterance("Save as ");
+            self.sound_manager.play_and_wait(Box::new(utt));
             let new_name = self.prompt("Save as: ", |_, _, _| {}).unwrap_or(None);
             if new_name.is_none() {
                 self.status_message = StatusMessage::from("Save aborted.".to_string());
-                self.sound_manager
-                    .interrupt_and_play(Box::new(Utterance::from("Save aborted.")));
+                let utt = self.create_utterance("Save aborted.");
+                self.sound_manager.interrupt_and_play(Box::new(utt));
                 return;
             }
             self.document.file_name = new_name;
         }
 
         if self.document.save().is_ok() {
-            self.sound_manager
-                .interrupt_and_play(Box::new(Utterance::from("Saved. ")));
+            let utt = self.create_utterance("Saved. ");
+            self.sound_manager.interrupt_and_play(Box::new(utt));
 
             self.status_message = StatusMessage::from("File saved successfully.".to_string());
-            self.sound_manager
-                .interrupt_and_play(Box::new(Utterance::from(
-                    format!("Saved {}.", self.document.file_name.as_ref().unwrap()).as_str(),
-                )));
+            let utt = self.create_utterance(
+                format!("Saved {}.", self.document.file_name.as_ref().unwrap()).as_str(),
+            );
+            self.sound_manager.interrupt_and_play(Box::new(utt));
         } else {
             self.status_message = StatusMessage::from("Error writing file!".to_string());
-            self.sound_manager
-                .interrupt_and_play(Box::new(Utterance::from("Error writing file!")));
+            let utt = self.create_utterance("Error writing file!");
+            self.sound_manager.interrupt_and_play(Box::new(utt));
         }
     }
 
@@ -509,7 +557,7 @@ impl Editor {
             x = width;
         }
 
-        let ending_y = y;
+        // let ending_y = y;
         self.cursor_position = Position { x, y };
     }
 
@@ -522,15 +570,15 @@ impl Editor {
     }
 
     fn say_current_location(&mut self) {
-        self.sound_manager
-            .interrupt_and_play(Box::new(Utterance::from(
-                format!(
-                    "Row {}, Column {}.",
-                    self.cursor_position.y + 1,
-                    self.cursor_position.x + 1
-                )
-                .as_str(),
-            )));
+        let utt = self.create_utterance(
+            format!(
+                "Row {}, Column {}.",
+                self.cursor_position.y + 1,
+                self.cursor_position.x + 1
+            )
+            .as_str(),
+        );
+        self.sound_manager.interrupt_and_play(Box::new(utt));
     }
 
     fn draw_welcome_message(&self) {

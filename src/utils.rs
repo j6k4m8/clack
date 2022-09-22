@@ -11,7 +11,8 @@ pub enum SearchDirection {
 /// - Replacing diacritics with their spoken equivalent
 /// - Speaking common operations like [i] as "index at i"
 ///
-pub fn string_to_speakable_tokens(text: &str, cursor_position: Option<usize>) -> String {
+pub fn string_to_speakable_tokens(text: &str, _: Option<usize>) -> String {
+    // pub fn string_to_speakable_tokens(text: &str, cursor_position: Option<usize>) -> String {
     let replace_map = vec![
         ("===", "triple equals"),
         ("```", "triple backtick"),

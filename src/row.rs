@@ -1,5 +1,5 @@
 use crate::{
-    sound::{self, Audible, SoundManager, Tone, Utterance},
+    sound::{self, SoundManager, Tone, Utterance},
     utils::{string_to_speakable_tokens, SearchDirection},
 };
 use std::cmp;
