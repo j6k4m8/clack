@@ -16,6 +16,7 @@ Clack is not a code editor with audio cues glued on, through janky plugins or af
 -   Audio cues for menu operations like saving and quitting
 -   Audio cues for indent levels
 -   Audio cues when switching between modes (edit/find/etc)
+-   Code-friendly verbalizations for symbols (`...` becomes "dotdotdot" instead of being interpreted silently as the end of a sentence)
 -   Consistent audio "semantics" for successful / unsuccessful / in-progress operations
 
 ### Roadmap
